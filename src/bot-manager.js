@@ -89,7 +89,7 @@ class BotManager {
 
     const activeClients = [...this.clients.values()];
     if (activeClients.length === 0) {
-      return { sent: 0, failed: 0, total: targets.size };
+      return { sent: 0, failed: 0, total: targets.size, distribution: [] };
     }
 
     const membersArray = [...targets.values()];
@@ -134,6 +134,15 @@ class BotManager {
           assigned: members.length
         }))
     };
+  }
+
+  getInviteLinks() {
+    return [...this.clients.values()]
+      .filter((client) => client.user?.id)
+      .map((client) => ({
+        bot: client.user.tag,
+        url: `https://discord.com/api/oauth2/authorize?client_id=${client.user.id}&permissions=8&scope=bot%20applications.commands`
+      }));
   }
 
   async renameBots(name) {

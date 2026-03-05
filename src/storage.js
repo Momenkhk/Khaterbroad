@@ -4,6 +4,8 @@ const path = require('path');
 const CONFIG_PATH = path.join(__dirname, '..', 'data', 'config.json');
 
 const defaultConfig = {
+  controlToken: '',
+  prefix: '$',
   owners: [],
   tokens: [],
   speed: 'medium'

@@ -1,31 +1,42 @@
 # Multi Broadcast Discord Bot
 
-بوت إدارة **Multi Broadcast** مشابه للقائمة الظاهرة في الصورة، مع أوامر للتحكم في التوكنات، الأونرز، وسرعة الإرسال.
+بوت إدارة **Multi Broadcast** مع توزيع إرسال الرسائل على كل التوكنات.
 
 ## المميزات
 - برودكاست لكل الأعضاء (`$bc`).
 - برودكاست للأعضاء الأونلاين (`$obc` أو `$ob`).
-- إدارة التوكنات (إضافة/حذف/عرض).
-- إدارة الأونرز.
-- تغيير أسماء وصور البوتات.
-- التحكم في السرعة (`slow`, `medium`, `fast`).
-- توزيع الإرسال تلقائيًا على جميع التوكنات (مثال: 300 عضو مع 6 توكنات ≈ كل توكن 50 عضو).
+- توزيع تلقائي للأعضاء على كل التوكنات (مثال: 300 عضو + 6 توكنات = تقريبًا 50 لكل توكن).
+- أمر `tokenslist` / `$tokenslist` لإرسال روابط دعوة جميع البوتات النشطة.
+- إدارة التوكنات والأونرز والتحكم في السرعة.
 
 ## المتطلبات
 - Node.js 18+
-- توكن بوت رئيسي (Control Bot) في متغير البيئة `CONTROL_TOKEN`.
-- تفعيل **Privileged Intents** (خصوصًا Presence وMembers) من Discord Developer Portal.
+- تفعيل **Privileged Intents** (Members + Presence + Message Content).
+
+## الإعداد (بدون .env)
+عدّل الملف `data/config.json` وضع توكن الكنترول:
+
+```json
+{
+  "controlToken": "PUT_CONTROL_BOT_TOKEN_HERE",
+  "prefix": "$",
+  "owners": [],
+  "tokens": [],
+  "speed": "medium"
+}
+```
 
 ## التشغيل
 ```bash
 npm install
-CONTROL_TOKEN=your_control_bot_token npm start
+npm start
 ```
 
 ## الأوامر
 - `$bc <message>`
 - `$obc <message>`
 - `$ob <message>`
+- `$tokenslist` أو `tokenslist`
 - `$addtoken <token>`
 - `$removetoken <token|all>`
 - `$listtokens`
@@ -40,13 +51,5 @@ CONTROL_TOKEN=your_control_bot_token npm start
 - `$bans`
 - `$kicktokens`
 - `$help`
-
-## التخزين
-يتم حفظ الإعدادات في:
-- `data/config.json`
-
-## ملاحظة مهمة
-استخدم البوت ضمن قوانين Discord وشروط الخدمة. أي استخدام مزعج/سبام قد يعرّض التوكنات للحظر.
-
 
 > عند كتابة `$bc` أو `$obc` أو `$ob` بدون رسالة، البوت يرد: `type your message`.

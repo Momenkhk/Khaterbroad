@@ -2,11 +2,11 @@
   "name": "multi-broadcast-bot",
   "version": "1.0.0",
   "description": "Discord multi-token broadcast manager bot",
-  "main": "src/main.js",
+  "main": "index.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node src/main.js",
-    "check": "node --check src/main.js && node --check src/bot-manager.js && node --check src/storage.js"
+    "start": "node index.js",
+    "check": "node --check index.js && node --check src/bot-manager.js && node --check src/storage.js"
   },
   "dependencies": {
     "discord.js": "^14.16.3"
