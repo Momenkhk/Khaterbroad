@@ -2,7 +2,7 @@ const { Client, GatewayIntentBits, Events, ActivityType } = require('discord.js'
 
 const SPEED_MS = {
   slow: 650,
-  medium: 120,
+  medium: 180,
   fast: 60
 };
 
@@ -76,7 +76,7 @@ class BotManager {
     const targets = members.filter((member) => {
       if (member.user.bot) return false;
       if (!onlineOnly) return true;
-      if (!member.presence) return true;
+      if (!member.presence) return false;
       return ['online', 'idle', 'dnd'].includes(member.presence.status);
     });
 
