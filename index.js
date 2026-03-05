@@ -68,7 +68,7 @@ function distributionText(distribution) {
   return distribution.map((item) => `• ${item.bot}: **${item.assigned}**`).join('\n');
 }
 
-function progressText({ total, sent, failed, distribution, title }) {
+function progressText({ total, sent, failed, distribution, title, unavailableClients = 0 }) {
   const dist = distributionText(distribution);
   return [
     `⏳ **${title}**`,
@@ -77,8 +77,9 @@ function progressText({ total, sent, failed, distribution, title }) {
     `فشل: **${failed}**`,
     '',
     'توزيع التوكنات:',
-    dist || 'لا يوجد توزيع.'
-  ].join('\n');
+    dist || 'لا يوجد توزيع.',
+    unavailableClients ? `توكنات خارج السيرفر الحالي: **${unavailableClients}**` : ''
+  ].filter(Boolean).join('\n');
 }
 
 controller.once(Events.ClientReady, async () => {
@@ -260,13 +261,20 @@ controller.on(Events.MessageCreate, async (message) => {
     const plan = await manager.buildBroadcastPlan({ guild: message.guild, onlineOnly });
 
     if (!plan.assignments.length) {
-      await message.reply('❌ لا توجد توكنات نشطة للإرسال حالياً.');
+      await message.reply('❌ لا توجد توكنات متاحة داخل هذا السيرفر للإرسال.');
       return;
     }
 
     const title = onlineOnly ? 'بدء Online Broadcast' : 'بدء Broadcast';
     const progressMessage = await message.reply(
-      progressText({ total: plan.total, sent: 0, failed: 0, distribution: plan.distribution, title })
+      progressText({
+        total: plan.total,
+        sent: 0,
+        failed: 0,
+        distribution: plan.distribution,
+        title,
+        unavailableClients: plan.meta?.unavailableClients || 0
+      })
     );
 
     let lastUpdateAt = Date.now();
@@ -290,19 +298,28 @@ controller.on(Events.MessageCreate, async (message) => {
               sent: progress.sent,
               failed: progress.failed,
               distribution: plan.distribution,
-              title
+              title,
+              unavailableClients: plan.meta?.unavailableClients || 0
             })
           );
         } catch {}
       }
     });
 
+    const reasons = Object.entries(result.failureReasons || {})
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([reason, count]) => `• ${reason}: **${count}**`)
+      .join('\n');
+
     await progressMessage.edit(
       `✅ **اكتمل البرودكاست**\n` +
       `المستهدف (متقسم على التوكنات): **${result.total}**\n` +
       `تم الإرسال: **${result.sent}**\n` +
       `فشل: **${result.failed}**\n\n` +
-      `توزيع التوكنات:\n${distributionText(plan.distribution) || 'لا يوجد توزيع.'}`
+      `توزيع التوكنات:\n${distributionText(plan.distribution) || 'لا يوجد توزيع.'}` +
+      `${plan.meta?.unavailableClients ? `\n\nتوكنات خارج السيرفر الحالي: **${plan.meta.unavailableClients}**` : ''}` +
+      `${reasons ? `\n\nأسباب الفشل الأعلى:\n${reasons}` : ''}`
     );
   }
 });

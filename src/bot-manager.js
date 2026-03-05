@@ -80,12 +80,15 @@ class BotManager {
       return ['online', 'idle', 'dnd'].includes(member.presence.status);
     });
 
-    const activeClients = [...this.clients.values()];
+    const activeClients = [...this.clients.values()].filter((client) => client.guilds.cache.has(guild.id));
+    const unavailableClients = this.clients.size - activeClients.length;
+
     if (activeClients.length === 0) {
       return {
         total: targets.size,
         assignments: [],
-        distribution: []
+        distribution: [],
+        meta: { unavailableClients }
       };
     }
 
@@ -106,13 +109,14 @@ class BotManager {
     return {
       total: targets.size,
       assignments,
-      distribution
+      distribution,
+      meta: { unavailableClients }
     };
   }
 
   async executeBroadcast({ assignments, content, speed = 'medium', onProgress, retries = 2, total = 0 }) {
     const delay = SPEED_MS[speed] ?? SPEED_MS.medium;
-    const stats = { sent: 0, failed: 0, total };
+    const stats = { sent: 0, failed: 0, total, failureReasons: {} };
     const clients = assignments.map((item) => item.client);
 
     const notifyProgress = async () => {
@@ -125,6 +129,7 @@ class BotManager {
       assignments.map(async ({ client, members }) => {
         for (const member of members) {
           let delivered = false;
+          let lastErrorKey = 'unknown_error';
           const fallbackOrder = [client, ...clients.filter((entry) => entry !== client)];
 
           for (let attempt = 0; attempt <= retries && !delivered; attempt += 1) {
@@ -136,13 +141,15 @@ class BotManager {
               await targetUser.send(content);
               stats.sent += 1;
               delivered = true;
-            } catch {
+            } catch (error) {
               delivered = false;
+              lastErrorKey = error?.code ? String(error.code) : (error?.message || 'unknown_error');
             }
           }
 
           if (!delivered) {
             stats.failed += 1;
+            stats.failureReasons[lastErrorKey] = (stats.failureReasons[lastErrorKey] || 0) + 1;
           }
 
           await notifyProgress();
@@ -157,7 +164,14 @@ class BotManager {
   async sendBroadcast({ guild, content, onlineOnly = false, speed = 'medium', onProgress }) {
     const plan = await this.buildBroadcastPlan({ guild, onlineOnly });
     if (plan.assignments.length === 0) {
-      return { sent: 0, failed: 0, total: plan.total, distribution: plan.distribution };
+      return {
+        sent: 0,
+        failed: 0,
+        total: plan.total,
+        distribution: plan.distribution,
+        failureReasons: {},
+        meta: plan.meta
+      };
     }
 
     const stats = await this.executeBroadcast({
@@ -168,7 +182,7 @@ class BotManager {
       total: plan.total
     });
 
-    return { ...stats, distribution: plan.distribution };
+    return { ...stats, distribution: plan.distribution, meta: plan.meta };
   }
 
   getInviteLinks() {
