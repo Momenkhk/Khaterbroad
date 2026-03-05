@@ -64,6 +64,23 @@ function maskToken(token) {
   return `${token.slice(0, 6)}...${token.slice(-6)}`;
 }
 
+function distributionText(distribution) {
+  return distribution.map((item) => `• ${item.bot}: **${item.assigned}**`).join('\n');
+}
+
+function progressText({ total, sent, failed, distribution, title }) {
+  const dist = distributionText(distribution);
+  return [
+    `⏳ **${title}**`,
+    `المستهدف (متقسم على التوكنات): **${total}**`,
+    `تم الإرسال: **${sent}** / **${total}**`,
+    `فشل: **${failed}**`,
+    '',
+    'توزيع التوكنات:',
+    dist || 'لا يوجد توزيع.'
+  ].join('\n');
+}
+
 controller.once(Events.ClientReady, async () => {
   console.log(`Control bot ready as ${controller.user.tag}`);
 
@@ -89,10 +106,7 @@ controller.on(Events.MessageCreate, async (message) => {
     return;
   }
 
-  if (cmd === `${PREFIX}help`) {
-    await message.reply(helpText());
-    return;
-  }
+  if (cmd === `${PREFIX}help`) return void (await message.reply(helpText()));
 
   if (cmd === `${PREFIX}addtoken`) {
     const token = rest.join(' ').trim();
@@ -142,13 +156,8 @@ controller.on(Events.MessageCreate, async (message) => {
 
   if (cmd === `${PREFIX}tokenslist` || cmd === 'tokenslist') {
     const links = manager.getInviteLinks();
-    if (!links.length) {
-      await message.reply('لا توجد بوتات توكن نشطة حالياً.');
-      return;
-    }
-
-    const text = links.map((item, i) => `${i + 1}. ${item.bot}\n${item.url}`).join('\n\n');
-    await message.reply(text);
+    if (!links.length) return void (await message.reply('لا توجد بوتات توكن نشطة حالياً.'));
+    await message.reply(links.map((item, i) => `${i + 1}. ${item.bot}\n${item.url}`).join('\n\n'));
     return;
   }
 
@@ -161,7 +170,6 @@ controller.on(Events.MessageCreate, async (message) => {
   if (cmd === `${PREFIX}addowner`) {
     const id = rest[0];
     if (!id) return void message.reply(`استخدم: \`${PREFIX}addowner <id>\``);
-
     config = updateConfig((draft) => {
       if (!draft.owners.includes(id)) draft.owners.push(id);
       return draft;
@@ -173,7 +181,6 @@ controller.on(Events.MessageCreate, async (message) => {
   if (cmd === `${PREFIX}removeowner`) {
     const id = rest[0];
     if (!id) return void message.reply(`استخدم: \`${PREFIX}removeowner <id|all>\``);
-
     config = updateConfig((draft) => {
       if (id === 'all') draft.owners = [];
       else draft.owners = draft.owners.filter((o) => o !== id);
@@ -191,7 +198,6 @@ controller.on(Events.MessageCreate, async (message) => {
   if (cmd === `${PREFIX}renamebots`) {
     const name = rest.join(' ').trim();
     if (!name) return void message.reply(`استخدم: \`${PREFIX}renamebots <name>\``);
-
     const report = await manager.renameBots(name);
     await message.reply(report.length ? report.join('\n') : 'لا توجد بوتات نشطة.');
     return;
@@ -200,7 +206,6 @@ controller.on(Events.MessageCreate, async (message) => {
   if (cmd === `${PREFIX}setavatars`) {
     const url = rest[0];
     if (!url) return void message.reply(`استخدم: \`${PREFIX}setavatars <url>\``);
-
     const report = await manager.setAvatars(url);
     await message.reply(report.length ? report.join('\n') : 'لا توجد بوتات نشطة.');
     return;
@@ -209,7 +214,6 @@ controller.on(Events.MessageCreate, async (message) => {
   if (cmd === `${PREFIX}setdes`) {
     const description = rest.join(' ').trim();
     if (!description) return void message.reply(`استخدم: \`${PREFIX}setdes <text>\``);
-
     const report = await manager.setDescriptions(description);
     await message.reply(report.length ? report.join('\n') : 'لا توجد بوتات نشطة.');
     return;
@@ -250,25 +254,56 @@ controller.on(Events.MessageCreate, async (message) => {
 
   if (cmd === `${PREFIX}bc` || cmd === `${PREFIX}obc` || cmd === `${PREFIX}ob`) {
     const text = rest.join(' ').trim();
-    if (!text) {
-      await message.reply('type your message');
+    if (!text) return void (await message.reply('type your message'));
+
+    const onlineOnly = cmd === `${PREFIX}obc` || cmd === `${PREFIX}ob`;
+    const plan = await manager.buildBroadcastPlan({ guild: message.guild, onlineOnly });
+
+    if (!plan.assignments.length) {
+      await message.reply('❌ لا توجد توكنات نشطة للإرسال حالياً.');
       return;
     }
 
-    await message.reply('⏳ جاري تنفيذ البرودكاست...');
+    const title = onlineOnly ? 'بدء Online Broadcast' : 'بدء Broadcast';
+    const progressMessage = await message.reply(
+      progressText({ total: plan.total, sent: 0, failed: 0, distribution: plan.distribution, title })
+    );
 
-    const result = await manager.sendBroadcast({
-      guild: message.guild,
+    let lastUpdateAt = Date.now();
+    const result = await manager.executeBroadcast({
+      assignments: plan.assignments,
       content: text,
-      onlineOnly: cmd === `${PREFIX}obc` || cmd === `${PREFIX}ob`,
-      speed: config.speed
+      speed: config.speed,
+      total: plan.total,
+      onProgress: async (progress) => {
+        const processed = progress.sent + progress.failed;
+        const now = Date.now();
+        if (processed !== progress.total && processed % 5 !== 0 && now - lastUpdateAt < 1500) {
+          return;
+        }
+        lastUpdateAt = now;
+
+        try {
+          await progressMessage.edit(
+            progressText({
+              total: progress.total,
+              sent: progress.sent,
+              failed: progress.failed,
+              distribution: plan.distribution,
+              title
+            })
+          );
+        } catch {}
+      }
     });
 
-    const distributionText = (result.distribution || [])
-      .map((item) => `• ${item.bot}: **${item.assigned}**`)
-      .join('\n');
-
-    await message.reply(`✅ اكتمل البرودكاست\nالعدد المستهدف: **${result.total}**\nتم الإرسال: **${result.sent}**\nفشل: **${result.failed}**${distributionText ? `\n\nتوزيع البث على التوكنات:\n${distributionText}` : ''}`);
+    await progressMessage.edit(
+      `✅ **اكتمل البرودكاست**\n` +
+      `المستهدف (متقسم على التوكنات): **${result.total}**\n` +
+      `تم الإرسال: **${result.sent}**\n` +
+      `فشل: **${result.failed}**\n\n` +
+      `توزيع التوكنات:\n${distributionText(plan.distribution) || 'لا يوجد توزيع.'}`
+    );
   }
 });
 

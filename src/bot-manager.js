@@ -1,9 +1,9 @@
 const { Client, GatewayIntentBits, Events, ActivityType } = require('discord.js');
 
 const SPEED_MS = {
-  slow: 700,
-  medium: 220,
-  fast: 80
+  slow: 650,
+  medium: 120,
+  fast: 60
 };
 
 class BotManager {
@@ -15,8 +15,7 @@ class BotManager {
 
   async attachTokens(tokens) {
     const uniqueTokens = [...new Set(tokens)];
-    const tasks = uniqueTokens.map((token) => this.attachToken(token));
-    await Promise.allSettled(tasks);
+    await Promise.allSettled(uniqueTokens.map((token) => this.attachToken(token)));
 
     for (const token of this.clients.keys()) {
       if (!uniqueTokens.includes(token)) {
@@ -26,9 +25,7 @@ class BotManager {
   }
 
   async attachToken(token) {
-    if (this.clients.has(token) || this.badTokens.has(token)) {
-      return;
-    }
+    if (this.clients.has(token) || this.badTokens.has(token)) return;
 
     const client = new Client({
       intents: [
@@ -65,9 +62,7 @@ class BotManager {
 
   async detachToken(token) {
     const client = this.clients.get(token);
-    if (!client) {
-      return;
-    }
+    if (!client) return;
 
     try {
       await client.destroy();
@@ -76,23 +71,22 @@ class BotManager {
     }
   }
 
-  async sendBroadcast({ guild, content, onlineOnly = false, speed = 'medium' }) {
-    const delay = SPEED_MS[speed] ?? SPEED_MS.medium;
+  async buildBroadcastPlan({ guild, onlineOnly = false }) {
     const members = await guild.members.fetch();
     const targets = members.filter((member) => {
       if (member.user.bot) return false;
       if (!onlineOnly) return true;
-
-      // بعض الأعضاء Presence بتاعتهم بتكون unavailable؛ نعتبرهم قابلين للاستهداف
-      // عشان أمر obc/ob ما يجيبش نسبة قليلة جدًا.
       if (!member.presence) return true;
-
       return ['online', 'idle', 'dnd'].includes(member.presence.status);
     });
 
     const activeClients = [...this.clients.values()];
     if (activeClients.length === 0) {
-      return { sent: 0, failed: 0, total: targets.size, distribution: [] };
+      return {
+        total: targets.size,
+        assignments: [],
+        distribution: []
+      };
     }
 
     const membersArray = [...targets.values()];
@@ -102,53 +96,79 @@ class BotManager {
       members: membersArray.slice(index * chunkSize, (index + 1) * chunkSize)
     }));
 
-    const workerResults = await Promise.all(
-      assignments.map(async ({ client, members }) => {
-        let workerSent = 0;
-        let workerFailed = 0;
+    const distribution = assignments
+      .filter(({ members: assignedMembers }) => assignedMembers.length)
+      .map(({ client, members: assignedMembers }) => ({
+        bot: client.user?.tag || 'unknown-bot',
+        assigned: assignedMembers.length
+      }));
 
+    return {
+      total: targets.size,
+      assignments,
+      distribution
+    };
+  }
+
+  async executeBroadcast({ assignments, content, speed = 'medium', onProgress, retries = 2, total = 0 }) {
+    const delay = SPEED_MS[speed] ?? SPEED_MS.medium;
+    const stats = { sent: 0, failed: 0, total };
+    const clients = assignments.map((item) => item.client);
+
+    const notifyProgress = async () => {
+      if (typeof onProgress === 'function') {
+        await onProgress({ ...stats });
+      }
+    };
+
+    await Promise.all(
+      assignments.map(async ({ client, members }) => {
         for (const member of members) {
-          try {
-            const targetUser = await client.users.fetch(member.id);
-            await targetUser.send(content);
-            workerSent += 1;
-          } catch {
-            // Retry once عبر توكن آخر لرفع نسبة الوصول
-            const fallbackClient = activeClients.find((item) => item !== client);
-            if (fallbackClient) {
-              try {
-                const fallbackUser = await fallbackClient.users.fetch(member.id);
-                await fallbackUser.send(content);
-                workerSent += 1;
-              } catch {
-                workerFailed += 1;
-              }
-            } else {
-              workerFailed += 1;
+          let delivered = false;
+          const fallbackOrder = [client, ...clients.filter((entry) => entry !== client)];
+
+          for (let attempt = 0; attempt <= retries && !delivered; attempt += 1) {
+            const sender = fallbackOrder[attempt % fallbackOrder.length];
+            if (!sender) continue;
+
+            try {
+              const targetUser = await sender.users.fetch(member.id);
+              await targetUser.send(content);
+              stats.sent += 1;
+              delivered = true;
+            } catch {
+              delivered = false;
             }
           }
 
+          if (!delivered) {
+            stats.failed += 1;
+          }
+
+          await notifyProgress();
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
-
-        return { workerSent, workerFailed };
       })
     );
 
-    const sent = workerResults.reduce((total, item) => total + item.workerSent, 0);
-    const failed = workerResults.reduce((total, item) => total + item.workerFailed, 0);
+    return stats;
+  }
 
-    return {
-      sent,
-      failed,
-      total: targets.size,
-      distribution: assignments
-        .filter(({ members }) => members.length)
-        .map(({ client, members }) => ({
-          bot: client.user?.tag || 'unknown-bot',
-          assigned: members.length
-        }))
-    };
+  async sendBroadcast({ guild, content, onlineOnly = false, speed = 'medium', onProgress }) {
+    const plan = await this.buildBroadcastPlan({ guild, onlineOnly });
+    if (plan.assignments.length === 0) {
+      return { sent: 0, failed: 0, total: plan.total, distribution: plan.distribution };
+    }
+
+    const stats = await this.executeBroadcast({
+      assignments: plan.assignments,
+      content,
+      speed,
+      onProgress,
+      total: plan.total
+    });
+
+    return { ...stats, distribution: plan.distribution };
   }
 
   getInviteLinks() {
@@ -173,21 +193,12 @@ class BotManager {
     return report;
   }
 
-
   async setDescriptions(description) {
     const report = [];
     for (const client of this.clients.values()) {
       try {
-        if (!client.application) {
-          await client.application?.fetch();
-        }
-
-        if (!client.application) {
-          report.push(`❌ ${client.user?.tag || 'unknown-bot'}: application unavailable`);
-          continue;
-        }
-
-        await client.application.edit({ description });
+        const app = await client.fetchApplication();
+        await app.edit({ description });
         report.push(`✅ ${client.user.tag}`);
       } catch (error) {
         report.push(`❌ ${client.user?.tag || 'unknown-bot'}: ${error.message}`);
@@ -219,10 +230,7 @@ class BotManager {
   }
 
   getCount() {
-    return {
-      total: this.clients.size,
-      banned: this.badTokens.size
-    };
+    return { total: this.clients.size, banned: this.badTokens.size };
   }
 
   getBannedTokens() {
