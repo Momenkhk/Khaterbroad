@@ -138,7 +138,7 @@ class BotManager {
 
             try {
               const targetUser = await sender.users.fetch(member.id);
-              await targetUser.send(content);
+              await targetUser.send(`${content}\n<@${member.id}>`);
               stats.sent += 1;
               delivered = true;
             } catch (error) {
