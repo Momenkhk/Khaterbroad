@@ -50,6 +50,7 @@ function helpText() {
     '`$listowners` - عرض الأونرز',
     '`$renamebots <name>` - تغيير أسماء البوتات',
     '`$setavatars <url>` - تغيير صور البوتات',
+    '`$setdes <text>` - تغيير وصف (Description) البوتات',
     '`$mix` - خلط ترتيب البوتات',
     '`$setspeed <slow|medium|fast>` - تحديد سرعة البرودكاست',
     '`$bans` - عرض التوكنات المحظورة',
@@ -201,6 +202,15 @@ controller.on(Events.MessageCreate, async (message) => {
     if (!url) return void message.reply(`استخدم: \`${PREFIX}setavatars <url>\``);
 
     const report = await manager.setAvatars(url);
+    await message.reply(report.length ? report.join('\n') : 'لا توجد بوتات نشطة.');
+    return;
+  }
+
+  if (cmd === `${PREFIX}setdes`) {
+    const description = rest.join(' ').trim();
+    if (!description) return void message.reply(`استخدم: \`${PREFIX}setdes <text>\``);
+
+    const report = await manager.setDescriptions(description);
     await message.reply(report.length ? report.join('\n') : 'لا توجد بوتات نشطة.');
     return;
   }

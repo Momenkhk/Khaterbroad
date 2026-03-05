@@ -1,9 +1,9 @@
 const { Client, GatewayIntentBits, Events, ActivityType } = require('discord.js');
 
 const SPEED_MS = {
-  slow: 1800,
-  medium: 900,
-  fast: 350
+  slow: 700,
+  medium: 220,
+  fast: 80
 };
 
 class BotManager {
@@ -81,10 +81,13 @@ class BotManager {
     const members = await guild.members.fetch();
     const targets = members.filter((member) => {
       if (member.user.bot) return false;
-      if (onlineOnly) {
-        return member.presence && member.presence.status !== 'offline';
-      }
-      return true;
+      if (!onlineOnly) return true;
+
+      // بعض الأعضاء Presence بتاعتهم بتكون unavailable؛ نعتبرهم قابلين للاستهداف
+      // عشان أمر obc/ob ما يجيبش نسبة قليلة جدًا.
+      if (!member.presence) return true;
+
+      return ['online', 'idle', 'dnd'].includes(member.presence.status);
     });
 
     const activeClients = [...this.clients.values()];
@@ -110,7 +113,19 @@ class BotManager {
             await targetUser.send(content);
             workerSent += 1;
           } catch {
-            workerFailed += 1;
+            // Retry once عبر توكن آخر لرفع نسبة الوصول
+            const fallbackClient = activeClients.find((item) => item !== client);
+            if (fallbackClient) {
+              try {
+                const fallbackUser = await fallbackClient.users.fetch(member.id);
+                await fallbackUser.send(content);
+                workerSent += 1;
+              } catch {
+                workerFailed += 1;
+              }
+            } else {
+              workerFailed += 1;
+            }
           }
 
           await new Promise((resolve) => setTimeout(resolve, delay));
@@ -153,6 +168,29 @@ class BotManager {
         report.push(`✅ ${client.user.tag}`);
       } catch (error) {
         report.push(`❌ ${client.user.tag}: ${error.message}`);
+      }
+    }
+    return report;
+  }
+
+
+  async setDescriptions(description) {
+    const report = [];
+    for (const client of this.clients.values()) {
+      try {
+        if (!client.application) {
+          await client.application?.fetch();
+        }
+
+        if (!client.application) {
+          report.push(`❌ ${client.user?.tag || 'unknown-bot'}: application unavailable`);
+          continue;
+        }
+
+        await client.application.edit({ description });
+        report.push(`✅ ${client.user.tag}`);
+      } catch (error) {
+        report.push(`❌ ${client.user?.tag || 'unknown-bot'}: ${error.message}`);
       }
     }
     return report;
