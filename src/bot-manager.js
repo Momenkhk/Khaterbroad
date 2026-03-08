@@ -39,7 +39,13 @@ class BotManager {
     });
 
     client.once(Events.ClientReady, () => {
-      client.user.setActivity('Multi Broadcast', { type: ActivityType.Watching }).catch(() => {});
+      try {
+        client.user.setPresence({
+          status: 'idle',
+          activities: [{ name: 'Multi Broadcast', type: ActivityType.Watching }]
+        });
+      } catch {}
+
       this.clients.set(token, client);
       console.log(`[TOKEN READY] ${client.user.tag}`);
     });

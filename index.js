@@ -38,8 +38,8 @@ function helpText() {
   return [
     '📌 **أوامر البوت**',
     '`$bc <message>` - برودكاست لكل أعضاء السيرفر',
-    '`$obc <message>` - برودكاست للأعضاء الأونلاين فقط',
-    '`$ob <message>` - اختصار أمر الأونلاين برودكاست',
+    '`$obc <message>` - برودكاست للأعضاء Online / Idle / DND فقط',
+    '`$ob <message>` - برودكاست لكل أعضاء السيرفر (Online + Offline)',
     '`$tokenslist` - روابط دعوة البوتات',
     '`$addtoken <token>` - إضافة توكن جديد',
     '`$removetoken <token|all>` - حذف توكن أو كل التوكنات',
@@ -254,10 +254,16 @@ controller.on(Events.MessageCreate, async (message) => {
   }
 
   if (cmd === `${PREFIX}bc` || cmd === `${PREFIX}obc` || cmd === `${PREFIX}ob`) {
+    const isOnlineCommand = cmd === `${PREFIX}obc`;
+    const isAllMembersCommand = cmd === `${PREFIX}ob`;
     const text = rest.join(' ').trim();
+
+    if (!text && (isAllMembersCommand || isOnlineCommand)) {
+      return void (await message.reply('** Type your message **'));
+    }
     if (!text) return void (await message.reply('type your message'));
 
-    const onlineOnly = cmd === `${PREFIX}obc` || cmd === `${PREFIX}ob`;
+    const onlineOnly = isOnlineCommand;
     const plan = await manager.buildBroadcastPlan({ guild: message.guild, onlineOnly });
 
     if (!plan.assignments.length) {
