@@ -278,7 +278,7 @@ controller.on(Events.MessageCreate, async (message) => {
     const text = rest.join(' ').trim();
 
     if (!text && (isAllMembersCommand || isOnlineCommand)) {
-      return void (await replyTypeYourMessage(message));
+      return void (await message.reply('** Type your message **'));
     }
     if (!text) return void (await message.reply('type your message'));
 
