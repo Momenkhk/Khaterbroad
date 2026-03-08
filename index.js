@@ -1,4 +1,12 @@
-const { Client, GatewayIntentBits, Partials, Events } = require('discord.js');
+const {
+  Client,
+  GatewayIntentBits,
+  Partials,
+  Events,
+  ContainerBuilder,
+  TextDisplayBuilder,
+  MessageFlags
+} = require('discord.js');
 const { BotManager } = require('./src/bot-manager');
 const { readConfig, updateConfig } = require('./src/storage');
 
@@ -38,8 +46,8 @@ function helpText() {
   return [
     '📌 **أوامر البوت**',
     '`$bc <message>` - برودكاست لكل أعضاء السيرفر',
-    '`$obc <message>` - برودكاست للأعضاء الأونلاين فقط',
-    '`$ob <message>` - اختصار أمر الأونلاين برودكاست',
+    '`$obc <message>` - برودكاست للأعضاء Online / Idle / DND فقط',
+    '`$ob <message>` - برودكاست لكل أعضاء السيرفر (Online + Offline)',
     '`$tokenslist` - روابط دعوة البوتات',
     '`$addtoken <token>` - إضافة توكن جديد',
     '`$removetoken <token|all>` - حذف توكن أو كل التوكنات',
@@ -80,6 +88,17 @@ function progressText({ total, sent, failed, distribution, title, unavailableCli
     dist || 'لا يوجد توزيع.',
     unavailableClients ? `توكنات خارج السيرفر الحالي: **${unavailableClients}**` : ''
   ].filter(Boolean).join('\n');
+}
+
+async function replyTypeYourMessage(message) {
+  const container = new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent('** Type your message **')
+  );
+
+  await message.reply({
+    components: [container],
+    flags: MessageFlags.IsComponentsV2
+  });
 }
 
 controller.once(Events.ClientReady, async () => {
@@ -254,10 +273,16 @@ controller.on(Events.MessageCreate, async (message) => {
   }
 
   if (cmd === `${PREFIX}bc` || cmd === `${PREFIX}obc` || cmd === `${PREFIX}ob`) {
+    const isOnlineCommand = cmd === `${PREFIX}obc`;
+    const isAllMembersCommand = cmd === `${PREFIX}ob`;
     const text = rest.join(' ').trim();
+
+    if (!text && (isAllMembersCommand || isOnlineCommand)) {
+      return void (await replyTypeYourMessage(message));
+    }
     if (!text) return void (await message.reply('type your message'));
 
-    const onlineOnly = cmd === `${PREFIX}obc` || cmd === `${PREFIX}ob`;
+    const onlineOnly = isOnlineCommand;
     const plan = await manager.buildBroadcastPlan({ guild: message.guild, onlineOnly });
 
     if (!plan.assignments.length) {
