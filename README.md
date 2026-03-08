@@ -1,4 +1,3 @@
-# Multi Broadcast Discord Bot
 
 بوت إدارة **Multi Broadcast** مع توزيع إرسال الرسائل على كل التوكنات.
 

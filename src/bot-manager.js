@@ -1,8 +1,8 @@
 const { Client, GatewayIntentBits, Events, ActivityType } = require('discord.js');
 
 const SPEED_MS = {
-  slow: 650,
-  medium: 180,
+  slow: 350,
+  medium: 120,
   fast: 60
 };
 
@@ -42,7 +42,7 @@ class BotManager {
       try {
         client.user.setPresence({
           status: 'idle',
-          activities: [{ name: 'Multi Broadcast', type: ActivityType.Watching }]
+          activities: [{ name: 'صلي علي النبي', type: ActivityType.Watching }]
         });
       } catch {}
 

@@ -1,4 +1,12 @@
-const { Client, GatewayIntentBits, Partials, Events } = require('discord.js');
+const {
+  Client,
+  GatewayIntentBits,
+  Partials,
+  Events,
+  ContainerBuilder,
+  TextDisplayBuilder,
+  MessageFlags
+} = require('discord.js');
 const { BotManager } = require('./src/bot-manager');
 const { readConfig, updateConfig } = require('./src/storage');
 
@@ -80,6 +88,17 @@ function progressText({ total, sent, failed, distribution, title, unavailableCli
     dist || 'لا يوجد توزيع.',
     unavailableClients ? `توكنات خارج السيرفر الحالي: **${unavailableClients}**` : ''
   ].filter(Boolean).join('\n');
+}
+
+async function replyTypeYourMessage(message) {
+  const container = new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent('** Type your message **')
+  );
+
+  await message.reply({
+    components: [container],
+    flags: MessageFlags.IsComponentsV2
+  });
 }
 
 controller.once(Events.ClientReady, async () => {
