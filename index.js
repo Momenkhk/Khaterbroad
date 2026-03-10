@@ -119,8 +119,10 @@ controller.on(Events.MessageCreate, async (message) => {
     return;
   }
 
-  const [command, ...rest] = message.content.trim().split(/\s+/);
+  const trimmedContent = message.content.trim();
+  const [command, ...rest] = trimmedContent.split(/\s+/);
   const cmd = command.toLowerCase();
+  const rawArgs = trimmedContent.slice(command.length).trim();
 
   if (!isOwner(message.author.id)) {
     return;
@@ -129,7 +131,7 @@ controller.on(Events.MessageCreate, async (message) => {
   if (cmd === `${PREFIX}help`) return void (await message.reply(helpText()));
 
   if (cmd === `${PREFIX}addtoken`) {
-    const token = rest.join(' ').trim();
+    const token = rawArgs;
     if (!token) return void message.reply(`استخدم: \`${PREFIX}addtoken <token>\``);
 
     try {
@@ -146,7 +148,7 @@ controller.on(Events.MessageCreate, async (message) => {
   }
 
   if (cmd === `${PREFIX}removetoken`) {
-    const target = rest.join(' ').trim();
+    const target = rawArgs;
     if (!target) return void message.reply(`استخدم: \`${PREFIX}removetoken <token|all>\``);
 
     if (target === 'all') {
@@ -216,7 +218,7 @@ controller.on(Events.MessageCreate, async (message) => {
   }
 
   if (cmd === `${PREFIX}renamebots`) {
-    const name = rest.join(' ').trim();
+    const name = rawArgs;
     if (!name) return void message.reply(`استخدم: \`${PREFIX}renamebots <name>\``);
     const report = await manager.renameBots(name);
     await message.reply(report.length ? report.join('\n') : 'لا توجد بوتات نشطة.');
@@ -232,7 +234,7 @@ controller.on(Events.MessageCreate, async (message) => {
   }
 
   if (cmd === `${PREFIX}setdes`) {
-    const description = rest.join(' ').trim();
+    const description = rawArgs;
     if (!description) return void message.reply(`استخدم: \`${PREFIX}setdes <text>\``);
     const report = await manager.setDescriptions(description);
     await message.reply(report.length ? report.join('\n') : 'لا توجد بوتات نشطة.');
@@ -275,7 +277,7 @@ controller.on(Events.MessageCreate, async (message) => {
   if (cmd === `${PREFIX}bc` || cmd === `${PREFIX}obc` || cmd === `${PREFIX}ob`) {
     const isOnlineCommand = cmd === `${PREFIX}obc`;
     const isAllMembersCommand = cmd === `${PREFIX}ob`;
-    const text = rest.join(' ').trim();
+    const text = rawArgs;
 
     if (!text && (isAllMembersCommand || isOnlineCommand)) {
       return void (await message.reply('** Type your message **'));
