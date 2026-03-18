@@ -191,9 +191,10 @@ class BotManager {
     return { ...stats, distribution: plan.distribution, meta: plan.meta };
   }
 
-  getInviteLinks() {
+  getInviteLinks(guildId) {
     return [...this.clients.values()]
       .filter((client) => client.user?.id)
+      .filter((client) => !guildId || !client.guilds.cache.has(guildId))
       .map((client) => ({
         bot: client.user.tag,
         url: `https://discord.com/api/oauth2/authorize?client_id=${client.user.id}&permissions=8&scope=bot%20applications.commands`

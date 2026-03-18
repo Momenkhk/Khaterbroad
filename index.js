@@ -76,6 +76,47 @@ function distributionText(distribution) {
   return distribution.map((item) => `• ${item.bot}: **${item.assigned}**`).join('\n');
 }
 
+function splitLongMessage(content, limit = 2000) {
+  if (!content || content.length <= limit) {
+    return [content];
+  }
+
+  const chunks = [];
+  let remaining = content;
+
+  while (remaining.length > limit) {
+    let splitIndex = remaining.lastIndexOf('\n', limit);
+    if (splitIndex <= 0) {
+      splitIndex = remaining.lastIndexOf(' ', limit);
+    }
+    if (splitIndex <= 0) {
+      splitIndex = limit;
+    }
+
+    chunks.push(remaining.slice(0, splitIndex).trim());
+    remaining = remaining.slice(splitIndex).trim();
+  }
+
+  if (remaining) {
+    chunks.push(remaining);
+  }
+
+  return chunks.filter(Boolean);
+}
+
+async function replyWithChunks(message, content) {
+  const chunks = splitLongMessage(content);
+
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index];
+    if (index === 0) {
+      await message.reply(chunk);
+    } else {
+      await message.channel.send(chunk);
+    }
+  }
+}
+
 function progressText({ total, sent, failed, distribution, title, unavailableClients = 0 }) {
   const dist = distributionText(distribution);
   return [
@@ -172,14 +213,14 @@ controller.on(Events.MessageCreate, async (message) => {
 
   if (cmd === `${PREFIX}listtokens`) {
     if (config.tokens.length === 0) return void message.reply('لا توجد توكنات مضافة.');
-    await message.reply(config.tokens.map((t, i) => `${i + 1}. ${maskToken(t)}`).join('\n'));
+    await replyWithChunks(message, config.tokens.map((t, i) => `${i + 1}. ${maskToken(t)}`).join('\n'));
     return;
   }
 
   if (cmd === `${PREFIX}tokenslist` || cmd === 'tokenslist') {
-    const links = manager.getInviteLinks();
+    const links = manager.getInviteLinks(message.guild.id);
     if (!links.length) return void (await message.reply('لا توجد بوتات توكن نشطة حالياً.'));
-    await message.reply(links.map((item, i) => `${i + 1}. ${item.bot}\n${item.url}`).join('\n\n'));
+    await replyWithChunks(message, links.map((item, i) => `${i + 1}. ${item.bot}\n${item.url}`).join('\n\n'));
     return;
   }
 
@@ -213,7 +254,7 @@ controller.on(Events.MessageCreate, async (message) => {
   }
 
   if (cmd === `${PREFIX}listowners`) {
-    await message.reply(config.owners.length ? config.owners.join('\n') : 'لا يوجد أونرز حالياً.');
+    await replyWithChunks(message, config.owners.length ? config.owners.join('\n') : 'لا يوجد أونرز حالياً.');
     return;
   }
 
@@ -221,7 +262,7 @@ controller.on(Events.MessageCreate, async (message) => {
     const name = rawArgs;
     if (!name) return void message.reply(`استخدم: \`${PREFIX}renamebots <name>\``);
     const report = await manager.renameBots(name);
-    await message.reply(report.length ? report.join('\n') : 'لا توجد بوتات نشطة.');
+    await replyWithChunks(message, report.length ? report.join('\n') : 'لا توجد بوتات نشطة.');
     return;
   }
 
@@ -229,7 +270,7 @@ controller.on(Events.MessageCreate, async (message) => {
     const url = rest[0];
     if (!url) return void message.reply(`استخدم: \`${PREFIX}setavatars <url>\``);
     const report = await manager.setAvatars(url);
-    await message.reply(report.length ? report.join('\n') : 'لا توجد بوتات نشطة.');
+    await replyWithChunks(message, report.length ? report.join('\n') : 'لا توجد بوتات نشطة.');
     return;
   }
 
@@ -237,7 +278,7 @@ controller.on(Events.MessageCreate, async (message) => {
     const description = rawArgs;
     if (!description) return void message.reply(`استخدم: \`${PREFIX}setdes <text>\``);
     const report = await manager.setDescriptions(description);
-    await message.reply(report.length ? report.join('\n') : 'لا توجد بوتات نشطة.');
+    await replyWithChunks(message, report.length ? report.join('\n') : 'لا توجد بوتات نشطة.');
     return;
   }
 
@@ -264,7 +305,7 @@ controller.on(Events.MessageCreate, async (message) => {
 
   if (cmd === `${PREFIX}bans`) {
     const bans = manager.getBannedTokens();
-    await message.reply(bans.length ? bans.map(maskToken).join('\n') : 'لا توجد توكنات محظورة.');
+    await replyWithChunks(message, bans.length ? bans.map(maskToken).join('\n') : 'لا توجد توكنات محظورة.');
     return;
   }
 
